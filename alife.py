@@ -29,12 +29,12 @@ class Animal:
         self.alive = True
 
     def reproduce(self):
-        """animal reproduction"""
+        """"""
         self.eaten = 0
         return copy.deepcopy(self)
 
     def eat(self, amount: int):
-        """Feed the rabbit some grass"""
+        """"""
         self.eaten += amount
 
     def move(self):
@@ -56,16 +56,26 @@ class Field:
         and initially no rabbits"""
         self.field = np.ones((ARRSIZE, ARRSIZE))
         self.rabbits = []
-        pass
+        self.foxes = []
+        self.ate = []
 
     def add_rabbit(self, rabbit: object):
         """A new rabbit is added to the field"""
         self.rabbits.append(rabbit)
 
+    def add_fox(self, fox: object):
+        """Add new fox to the field"""
+        self.foxes.append(fox)
+
     def move(self):
         """Rabbits move"""
         for rabbit in self.rabbits:
             rabbit.move()
+        for fox in self.foxes:
+            fox.move()
+
+    # def _get_eaten(self, rabbit):
+    #     self.rabbits.remove(rabbit)
 
     def eat(self):
         """Rabbits eat (if they find grass where they are)"""
@@ -73,10 +83,17 @@ class Field:
             grass_amount = self.field[rabbit.x, rabbit.y]
             rabbit.eat(grass_amount)
             self.field[rabbit.x, rabbit.y] = 0  # Grass is eaten, set to 0
+            self.ate.append(rabbit)
+        for fox in self.foxes:
+            for rabbit in self.rabbits:
+                if fox.x == rabbit.x & fox.y == rabbit.y:
+                    rabbit_to_eat = rabbit
+                    self.rabbits.remove(rabbit_to_eat)
+                    self.ate.append(fox)
 
     def survive(self):
         """Rabbits who eat some grass live to eat another day"""
-        self.rabbits = [r for r in self.rabbits if r.eaten > 0]
+        self.rabbits = [r for r in self.rabbits if r.hunger_level > r.max_hunger]
 
     def reproduce(self):
         """Rabbits reproduce like rabbits."""
