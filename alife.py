@@ -7,9 +7,11 @@ import copy
 # =========== Constants  ============
 ARRSIZE = 200
 FIGSIZE = 8
-INIT_RABBITS = 1000
-GRASS_RATE = 0.99
-OFFSPRING = 2
+INIT_RABBITS = 100000
+INIT_FOXES = 100
+GRASS_RATE = 0.01
+OFFSPRING = 4
+NUM_GENERATIONS = 1000
 """
 COLOR_MAP = {
 0: Black (Nothing at that location), 
@@ -21,12 +23,14 @@ COLOR_MAP = {
 
 
 class Animal:
-    def __init__(self, type: str):
-        self.max_hunger = 1
-        self.starvation_level = 1
+    def __init__(self):
+        self.max_offspring = 1
+        self.starvation_level = 5
         self.reproduction_level = 1
         self.hunger = 0
         self.alive = True
+        self.x = rnd.randrange(0, ARRSIZE)
+        self.y = rnd.randrange(0, ARRSIZE)
 
     def reproduce(self):
         """"""
@@ -93,7 +97,8 @@ class Field:
 
     def survive(self):
         """Rabbits who eat some grass live to eat another day"""
-        self.rabbits = [r for r in self.rabbits if r.hunger_level > r.max_hunger]
+        self.rabbits = [r for r in self.rabbits if r.hunger >= r.starvation_level]
+        self.foxes = [f for f in self.foxes if f.hunger >= f.starvation_level]
 
     def reproduce(self):
         """Rabbits reproduce like rabbits."""
@@ -118,8 +123,59 @@ class Field:
         self.survive()  # Check survival from LAST generation
 
 
+def animate(i, field, im):
+    field.generation()
+    # Mark rabbit positions on the field for display
+    display_field = field.field.copy()
+    for rabbit in field.rabbits:
+        display_field[rabbit.x, rabbit.y] = 2
+    im.set_array(display_field)  # Inject new field state into the img array
+    plt.title(
+        f"Generation: {i}, Nrabbits: {len(field.rabbits)}, Nfoxes: {len(field.foxes)}"
+    )
+    return (im,)
+
+
 def main():
-    pass
+    # Create a field
+    field = Field()
+
+    # Then God created rabbits....
+    for _ in range(INIT_RABBITS):
+        new_rabbit = Animal()
+        field.add_rabbit(new_rabbit)
+
+    print(f"added {len(field.rabbits)} rabbits to the figure")
+    for _ in range(INIT_FOXES):
+        new_fox = Animal()
+        field.add_fox(new_fox)
+    print(f"added {len(field.foxes)} foxes to the figure")
+
+    fig, ax = plt.subplots(figsize=(FIGSIZE, FIGSIZE))
+    cmap = plt.cm.colors.ListedColormap(["black", "green", "white", "red"])
+    img = ax.imshow(field.field, cmap=cmap, vmin=0, vmax=3)
+
+    def update(frame):
+        field.generation()
+        display = field.field.copy()
+
+        for r in field.rabbits:
+            if r.alive:
+                display[r.y, r.x] = 2
+        for f in field.foxes:
+            if f.alive:
+                display[f.y, f.x] = 3
+
+        img.set_data(display)
+        ax.set_title(
+            f"Generation {frame} | Rabbits: {len(field.rabbits)} Foxes: {len(field.foxes)}"
+        )
+        return [img]
+
+    ani = animation.FuncAnimation(
+        fig, update, frames=NUM_GENERATIONS, interval=200, blit=True
+    )
+    plt.show()
 
 
 if __name__ == "__main__":
