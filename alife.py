@@ -8,18 +8,26 @@ import copy
 ARRSIZE = 200
 FIGSIZE = 8
 INIT_RABBITS = 200
-INIT_FOXES = 20
-GRASS_RATE = 0.01
+INIT_FOXES = 50
+GRASS_RATE = 0.5
 OFFSPRING = 4
-NUM_GENERATIONS = 500  # reduced for speed
-
+# NUM_GENERATIONS = 500  # reduced for speed
+# END = None
 """
 COLOR_MAP:
 0: Black (Nothing at that location)
 1: Green (Grass but no animals)
-2: White (Rabbit – but no foxes)
+2: White (Rabbit â€" but no foxes)
 3: Red (Fox)
 """
+# TODO
+"""
+- Time series of fox and rabbit population - gets fed during animation.
+- Make sure reproducing 
+- Make sure foxes eat rabbits 
+- fix counters to update every generation
+"""
+
 
 # =========== Animal Section ============
 class Animal:
@@ -51,6 +59,7 @@ class Animal:
         """Move up, down, left, right randomly"""
         self.x = (self.x + rnd.choice([-1, 0, 1])) % ARRSIZE
         self.y = (self.y + rnd.choice([-1, 0, 1])) % ARRSIZE
+
 
 # =========== Field Section ============
 class Field:
@@ -127,7 +136,34 @@ class Field:
         self.survive()
         self.grow_grass()
 
+
+# ======= Time Series Plots ========
+
+
+def plot_time_series():
+    pass
+
+
 # =========== Animation ============
+
+
+def update(frame, field, img, ax, generation):
+    field.generation()
+    generation += 1
+    display = field.field.copy()
+    for r in field.rabbits:
+        if r.alive:
+            display[r.y, r.x] = 2
+    for f in field.foxes:
+        if f.alive:
+            display[f.y, f.x] = 3
+    img.set_data(display)
+    ax.set_title(
+        f"Generation {generation} | Rabbits: {len(field.rabbits)} Foxes: {len(field.foxes)}"
+    )
+    return [img]
+
+
 def main():
     field = Field()
 
@@ -142,24 +178,15 @@ def main():
     fig, ax = plt.subplots(figsize=(FIGSIZE, FIGSIZE))
     cmap = plt.cm.colors.ListedColormap(["black", "green", "white", "red"])
     img = ax.imshow(field.field, cmap=cmap, vmin=0, vmax=3)
-
-    def update(frame):
-        field.generation()
-        display = field.field.copy()
-        for r in field.rabbits:
-            if r.alive:
-                display[r.y, r.x] = 2
-        for f in field.foxes:
-            if f.alive:
-                display[f.y, f.x] = 3
-        img.set_data(display)
-        ax.set_title(
-            f"Generation {frame} | Rabbits: {len(field.rabbits)} Foxes: {len(field.foxes)}"
-        )
-        return [img]
+    generation = 0
 
     ani = animation.FuncAnimation(
-        fig, update, frames=NUM_GENERATIONS, interval=200, blit=True
+        fig,
+        update,
+        fargs=(field, img, ax, generation),
+        frames=10**100,
+        interval=200,
+        blit=True,
     )
     plt.show()
 
