@@ -11,21 +11,13 @@ INIT_RABBITS = 200
 INIT_FOXES = 50
 GRASS_RATE = 0.5
 OFFSPRING = 4
-# NUM_GENERATIONS = 500  # reduced for speed
-# END = None
+
 """
 COLOR_MAP:
 0: Black (Nothing at that location)
 1: Green (Grass but no animals)
-2: White (Rabbit â€" but no foxes)
+2: White (Rabbit – but no foxes)
 3: Red (Fox)
-"""
-# TODO
-"""
-- Time series of fox and rabbit population - gets fed during animation.
-- Make sure reproducing 
-- Make sure foxes eat rabbits 
-- fix counters to update every generation
 """
 
 
@@ -68,6 +60,12 @@ class Field:
         self.rabbits = []
         self.foxes = []
 
+        # REVIEW!!
+        # Time series tracking
+        self.rabbit_history = []
+        self.fox_history = []
+        self.generation_count = 0
+
     def add_rabbit(self, rabbit: Animal):
         self.rabbits.append(rabbit)
 
@@ -99,6 +97,7 @@ class Field:
                         f.eaten += 1
                         f.hunger = 0
                         ate_rabbit = True
+                        break  # Fox only eats one rabbit per turn - REVIEW!!
                 if not ate_rabbit:
                     f.hunger += 1
                     if f.hunger >= f.starvation_level:
@@ -129,6 +128,7 @@ class Field:
         new_grass = (np.random.rand(ARRSIZE, ARRSIZE) < GRASS_RATE) * 1
         self.field = np.maximum(self.field, new_grass)
 
+    # REVIEW!!
     def generation(self):
         self.move_animals()
         self.eat()
@@ -136,20 +136,17 @@ class Field:
         self.survive()
         self.grow_grass()
 
-
-# ======= Time Series Plots ========
-
-
-def plot_time_series():
-    pass
+        # Update generation counter and track populations - REVIEW!!
+        self.generation_count += 1
+        self.rabbit_history.append(len(self.rabbits))
+        self.fox_history.append(len(self.foxes))
 
 
 # =========== Animation ============
-
-
-def update(frame, field, img, ax, generation):
+def update(frame, field, img, ax_main, ax_time, line_rabbits, line_foxes):
     field.generation()
-    generation += 1
+
+    # Update main field display - REVIEW!!
     display = field.field.copy()
     for r in field.rabbits:
         if r.alive:
@@ -158,10 +155,22 @@ def update(frame, field, img, ax, generation):
         if f.alive:
             display[f.y, f.x] = 3
     img.set_data(display)
-    ax.set_title(
-        f"Generation {generation} | Rabbits: {len(field.rabbits)} Foxes: {len(field.foxes)}"
+    ax_main.set_title(
+        f"Generation {field.generation_count} | Rabbits: {len(field.rabbits)} Foxes: {len(field.foxes)}"
     )
-    return [img]
+
+    # Update time series plot
+    line_rabbits.set_data(range(len(field.rabbit_history)), field.rabbit_history)
+    line_foxes.set_data(range(len(field.fox_history)), field.fox_history)
+
+    # Adjust x-axis limits dynamically
+    ax_time.set_xlim(0, max(len(field.rabbit_history), 100))
+
+    # Adjust y-axis limits dynamically with some padding
+    max_pop = max(max(field.rabbit_history, default=1), max(field.fox_history, default=1))
+    ax_time.set_ylim(0, max_pop * 1.1)
+
+    return [img, line_rabbits, line_foxes]
 
 
 def main():
@@ -175,16 +184,37 @@ def main():
     for _ in range(INIT_FOXES):
         field.add_fox(Animal("fox"))
 
-    fig, ax = plt.subplots(figsize=(FIGSIZE, FIGSIZE))
+    # Record initial populations
+    field.rabbit_history.append(len(field.rabbits))
+    field.fox_history.append(len(field.foxes))
+
+    # Create figure with two subplots
+    fig = plt.figure(figsize=(FIGSIZE * 2, FIGSIZE))
+    ax_main = plt.subplot(1, 2, 1)
+    ax_time = plt.subplot(1, 2, 2)
+
+    # Setup main field display
     cmap = plt.cm.colors.ListedColormap(["black", "green", "white", "red"])
-    img = ax.imshow(field.field, cmap=cmap, vmin=0, vmax=3)
-    generation = 0
+    img = ax_main.imshow(field.field, cmap=cmap, vmin=0, vmax=3)
+    ax_main.set_title(f"Generation 0 | Rabbits: {INIT_RABBITS} Foxes: {INIT_FOXES}")
+
+    # Setup time series plot
+    ax_time.set_xlabel("Generation")
+    ax_time.set_ylabel("Population")
+    ax_time.set_title("Population Over Time")
+    ax_time.grid(True, alpha=0.3)
+
+    line_rabbits, = ax_time.plot([], [], 'w-', linewidth=2, label='Rabbits')
+    line_foxes, = ax_time.plot([], [], 'r-', linewidth=2, label='Foxes')
+    ax_time.legend(loc='upper right')
+
+    plt.tight_layout()
 
     ani = animation.FuncAnimation(
         fig,
         update,
-        fargs=(field, img, ax, generation),
-        frames=10**100,
+        fargs=(field, img, ax_main, ax_time, line_rabbits, line_foxes),
+        frames=10 ** 100,
         interval=200,
         blit=True,
     )
