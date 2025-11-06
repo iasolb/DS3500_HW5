@@ -92,7 +92,7 @@ class Field:
 
         for f in self.foxes:
             if f.alive:
-                ate_something = False  # Assume no food at this location
+                ate_something = False
                 for r in self.rabbits:
                     if r.alive and r.x == f.x and r.y == f.y:
                         f.eat(r)
