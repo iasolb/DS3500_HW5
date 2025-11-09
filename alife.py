@@ -6,21 +6,14 @@ import copy
 
 # =========== Constants ============
 
-ARRSIZE = 200
+ARRSIZE = 100
 FIGSIZE = 8
-INIT_RABBITS = 200
-INIT_FOXES = 50
-GRASS_RATE = 0.5
-OFFSPRING = 4
-STARVATION_LEVEL = 5
+INIT_RABBITS = 100
+INIT_FOXES = 100
+GRASS_RATE = 0.08
+OFFSPRING = 2
+STARVATION_LEVEL = 2
 REPRODUCTION_LEVEL = 1
-"""
-COLOR_MAP:
-0: Black (Nothing at that location)
-1: Green (Grass but no animals)
-2: White (Rabbit – but no foxes)
-3: Red (Fox)
-"""
 
 # =========== Animal Section ============
 
@@ -36,11 +29,23 @@ class Animal:
         self.y = rnd.randrange(0, ARRSIZE)
 
     def reproduce(self, parent: object):
-        return [
-            copy.deepcopy(parent) for i in range(rnd.randint(1, self.max_offspring))
-        ]
+        """
+        Reproduce only if hunger level is at or below reproduction_level.
+        PDF Requirement: "Animals can only reproduce if the amount they have
+        eaten is at least as high as the reproduction level."
+        Interpretation: Low hunger = well-fed = can reproduce
+        """
+        if parent.hunger <= parent.reproduction_level:
+            return [
+                copy.deepcopy(parent) for i in range(rnd.randint(1, self.max_offspring))
+            ]
+        return []
 
     def eat(self, to_eat=None):
+        """
+        Reset hunger to 0 when eating. Kill eaten object
+        PDF Requirement: "If the animal eats something, the hunger level is reset to zero."
+        """
         self.hunger = 0
         if to_eat:
             if isinstance(to_eat, object):
@@ -61,7 +66,6 @@ class Field:
         self.rabbits = []
         self.foxes = []
 
-        # REVIEW!!
         # Time series tracking
         self.rabbit_history = []
         self.fox_history = []
@@ -82,76 +86,125 @@ class Field:
                 f.move()
 
     def eat(self):
+        """
+        Handle eating for both rabbits and foxes.
+        PDF Requirement: "When an animal goes a generation without eating,
+        its hunger level increases by one."
+
+        Uses location mapping for efficient fox feeding as per PDF:
+        "If you otherwise try to scan through the list of rabbits looking
+        for a location match, your code will run very slowly!"
+        """
+        # find all rabbits
+        rabbit_locations = {}  # tuple position: list of rabbits there
+        for r in self.rabbits:
+            if r.alive:
+                pos = (r.x, r.y)
+                if pos not in rabbit_locations:
+                    rabbit_locations[pos] = []
+                rabbit_locations[pos].append(r)
+
+        # run checks for grass (rabbit eat grass)
         for r in self.rabbits:
             if r.alive:
                 if self.field[r.x, r.y] != 0:
                     r.eat()
-                    self.field[r.y, r.x] = 0
+                    self.field[r.x, r.y] = 0
                 else:
                     r.hunger += 1
 
+        # run checks foxes on rabbits (fox eat rabbit)
         for f in self.foxes:
             if f.alive:
-                ate_something = False
-                for r in self.rabbits:
-                    if r.alive and r.x == f.x and r.y == f.y:
-                        f.eat(r)
-                        ate_something = True
-                        break  # stops the loop
-                if not ate_something:
+                pos = (f.x, f.y)
+                if pos in rabbit_locations:
+                    rabbits_here = rabbit_locations[pos]
+                    if len(rabbits_here) > 0:
+                        f.eat(rabbits_here[0])
+                else:
                     f.hunger += 1
 
     def reproduce(self):
+        """
+        Animals reproduce based on hunger level.
+        Returns empty list if hunger is too high.
+        """
+        new_rabbits = []
         for r in self.rabbits:
-            if r.alive and r.hunger <= r.reproduction_level:
+            if r.alive:
                 babies = r.reproduce(r)
-                self.rabbits.extend(babies)
+                new_rabbits.extend(babies)
+
+        new_foxes = []
         for f in self.foxes:
-            if f.alive and f.hunger <= f.reproduction_level:
+            if f.alive:
                 babies = f.reproduce(f)
-                self.foxes.extend(babies)
+                new_foxes.extend(babies)
+
+        self.rabbits.extend(new_rabbits)
+        self.foxes.extend(new_foxes)
 
     def survive(self):
+        """
+        PDF Requirement: "If the hunger level reaches the starvation level,
+        the animal dies."
+        Also: "Mark it dead and remove it from the population as part of
+        determining which animals survived to the next generation."
+        """
         for animal in self.rabbits + self.foxes:
             if animal.hunger >= animal.starvation_level:
                 animal.alive = False
+
         self.rabbits = [r for r in self.rabbits if r.alive]
         self.foxes = [f for f in self.foxes if f.alive]
 
     def grow_grass(self):
+        """Grass grows back with some probability at each location"""
         new_grass = (np.random.rand(ARRSIZE, ARRSIZE) < GRASS_RATE) * 1
         self.field = np.maximum(self.field, new_grass)
 
-    # REVIEW!!
     def generation(self):
+        """
+        One generation cycle in the correct order:
+        1. Move animals
+        2. Eat (hunger management happens here)
+        3. Reproduce (based on current hunger level)
+        4. Survive (remove starved animals)
+        5. Grow grass
+        """
         self.move_animals()
         self.eat()
         self.reproduce()
         self.survive()
         self.grow_grass()
 
-        # Update generation counter and track populations - REVIEW!!
         self.generation_count += 1
         self.rabbit_history.append(len(self.rabbits))
         self.fox_history.append(len(self.foxes))
 
 
 # =========== Animation ============
-def update(frame, field, img, ax_main, ax_time, line_rabbits, line_foxes):
+def animate(i, field, img, ax_main, ax_time, line_rabbits, line_foxes):
+    """
+    Animation function that updates both the field display and time series plot.
+    """
     field.generation()
 
-    # Update main field display - REVIEW!!
-    display = field.field.copy()
+    display = field.field.copy()  # local for display
+
     for r in field.rabbits:
         if r.alive:
             display[r.y, r.x] = 2
+
     for f in field.foxes:
         if f.alive:
             display[f.y, f.x] = 3
-    img.set_data(display)
+
+    img.set_array(display)
     ax_main.set_title(
         f"Generation {field.generation_count} | Rabbits: {len(field.rabbits)} Foxes: {len(field.foxes)}"
     )
+
     line_rabbits.set_data(range(len(field.rabbit_history)), field.rabbit_history)
     line_foxes.set_data(range(len(field.fox_history)), field.fox_history)
 
@@ -160,12 +213,15 @@ def update(frame, field, img, ax_main, ax_time, line_rabbits, line_foxes):
     max_pop = max(
         max(field.rabbit_history, default=1), max(field.fox_history, default=1)
     )
-    ax_time.set_ylim(0, max_pop * 1.1)
+    ax_time.set_ylim(0, max_pop * 1.1)  # extend the display as populations grow
 
-    return [img, line_rabbits, line_foxes]
+    return (img,)
 
 
 def main():
+    """
+    Main function to initialize and run the simulation.
+    """
     field = Field()
 
     for _ in range(INIT_RABBITS):
@@ -181,32 +237,31 @@ def main():
     ax_main = plt.subplot(1, 2, 1)
     ax_time = plt.subplot(1, 2, 2)
 
-    # Setup main field display
     cmap = plt.cm.colors.ListedColormap(["black", "green", "white", "red"])
-    img = ax_main.imshow(field.field, cmap=cmap, vmin=0, vmax=3)
+    img = ax_main.imshow(
+        field.field, cmap=cmap, vmin=0, vmax=3, interpolation="hamming"
+    )
     ax_main.set_title(
         f"Generation {field.generation_count} | Rabbits: {INIT_RABBITS} Foxes: {INIT_FOXES}"
     )
 
-    # Setup time series plot
     ax_time.set_xlabel("Generation")
     ax_time.set_ylabel("Population")
     ax_time.set_title("Population Over Time")
     ax_time.grid(True, alpha=0.3)
 
-    (line_rabbits,) = ax_time.plot([], [], "w-", linewidth=2, label="Rabbits")
-    (line_foxes,) = ax_time.plot([], [], "r-", linewidth=2, label="Foxes")
+    (line_rabbits,) = ax_time.plot([], [], "blue", linewidth=2, label="Rabbits")
+    (line_foxes,) = ax_time.plot([], [], "red", linewidth=2, label="Foxes")
     ax_time.legend(loc="upper right")
 
     plt.tight_layout()
 
-    ani = animation.FuncAnimation(
+    anim = animation.FuncAnimation(
         fig,
-        update,
+        animate,
         fargs=(field, img, ax_main, ax_time, line_rabbits, line_foxes),
         frames=10**100,
         interval=200,
-        blit=True,
     )
     plt.show()
 
